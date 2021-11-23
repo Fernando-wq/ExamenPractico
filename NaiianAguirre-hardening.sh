@@ -1,87 +1,52 @@
-#!/bin/sh
-OS=$(. /etc/os-release; echo $ID)
-VERSION=$(. /etc/os-release; echo $VERSION_ID)
-ejecutar='systemctl start clam@scan'
-echo $OS $VERSION
+#!/usr/bin/bash 
+listado=$(yum list installed | grep '^clamav')
+version=$(grep 'VERSION_ID' /etc/os-release)
 
-if [[ $OS == 'centos' ]]
+echo '-------------------------------revisando la version-------------------------------'
+if [[ $version = 'VERSION_ID="8"' ]];
 then
-	echo '-------------------------------es centos-------------------------------'
-	
-	if [[ $VERSION == 8 ]] 
-	then
-		echo '-------------------------------de version 8-------------------------------'
+ 
+  echo -e "-------------------------------es CentOS v8-------------------------------"
+  
+  if [[ $listado = "" ]];
+  then
+    echo -e "-------------------------------instalando clamAV-------------------------------"
+    sudo yum -y install https://www.clamav.net/downloads/production/clamav-0.104.1.linux.x86_64.rpm
 
-		if ! [[ $(command -v freshclam) ]]
-		then
-			echo '-------------------------------no tiene clamAV instalado-------------------------------'
-			sudo dnf update -y
-			echo '-------------------------------instalando clamv -------------------------------'
-			sudo dnf install clamav -y
+  else
+    echo -e "-------------------------------clamAV ya esta instalado, se desinstalara para reinstalarlo-------------------------------"
+    sudo yum -y erase clamav*
+    sudo yum -y install https://www.clamav.net/downloads/production/clamav-0.104.1.linux.x86_64.rpm
+  fi
 
-			echo '-------------------------------instalando clamd -------------------------------'
-			sudo dnf install clamd -y
-
-			echo '-------------------------------instalando paquetes de clam -------------------------------'
-			sudo dnf install clamav clamd clamav-scanner clamav-update -y
-
-			echo '-------------------------------habilitando escaneos-------------------------------'
-			sudo setsebool -P antivirus_can_scan_system 1
-
-			echo '-------------------------------actualizando clam-------------------------------'
-			sudo freshclam
-
-			echo '-------------------------------modificando archivo /etc/clamd.d/scan.conf-------------------------------'
-			sudo sed -i 's/#LocalSocket \/run/LocalSocket \/run/g' /etc/clamd.d/scan.conf
-
-			echo '-------------------------------modificando /usr/lib/systemd/system/clamd@.service-------------------------------'
-			sudo sed -i 's/scanner (%i) daemon/scanner daemon/g' /usr/lib/systemd/system/clamd@.service
-			sudo sed -i 's/\/etc\/clamd.d\/%i.conf/\/etc\/clamd.d\/scan.conf/g' /usr/lib/systemd/system/clamd@.service
-
-			echo '-------------------------------iniciando controles freshclam.service-------------------------------'
-			sudo systemctl enable freshclam.service
-			sudo systemctl start freshclam.service
-			sudo systemctl status freshclam.service
-
-			echo '-------------------------------iniciando controles clamd@.service-------------------------------'
-			sudo systemctl enable clamd@.service
-
-			echo '-------------------------------iniciando clamd@scan-------------------------------'
-			sudo systemctl start clamd@scan
-			sudo systemctl status clamd@scan
-
-		else	
-			echo '-------------------------------si tiene clamAV instalado-------------------------------'
-			echo '-------------------------------deteniendo servicios-------------------------------'
-			sudo systemctl stop clamd@scan
-			sudo systemctl stop clamd@.service
-			sudo systemctl stop freshclam.service
-			echo '-------------------------------desinstalando clamAV-------------------------------'
-			sudo yum autoremove clamav clamd clamav-update -y			
-		fi
-
-		
-	elif [[ $VERSION == 7 ]]
-	then
-		echo '-------------------------------de version 7-------------------------------'
-
-		echo '-------------------------------instalando epel-release y habilitando repositorios extra-------------------------------'
-		sudo yum -y install epel-release
-		sudo yum clean all
-		
-		sudo yum -y install clamav-server clamav-data clamav-update clamav-filesystem clamav clamav-scanner-systemd clamav-devel clamav-lib clamav-server-systemd
-		sudo setsebool -P antivirus_can_scan_system 1
-		sudo setsebool -P clamd_use_jit 1
-
-		sudo getsebool -a | grep antivirus
-		
-		sudo sed -i -e "s/^Example/#Example/" /etc/clamd.d/scan.conf
-	fi
-		
-else		
-	echo '-------------------------------no es centos-------------------------------'
-
+elif [[ $version = 'VERSION_ID="7"' ]];
+then
+  echo -e "-------------------------------es CentOS v7-------------------------------"
+  echo -e "-------------------------------instalando EPEL-------------------------------"
+  sudo yum -y install https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm
+ 
+ if [[ $listado = "" ]];
+  then
+    echo -e "-------------------------------instalando clamAV-------------------------------"
+    sudo yum -y install clamav
+ 
+  else
+    echo -e "-------------------------------clamAV ya esta instalado, se desinstalara para reinstalarlo-------------------------------"
+    sudo yum -y erase clamav*
+    sudo yum -y install clamav
+  fi
 fi
+
+if [[ $(yum check-update -q | awk '{print $1}') = "" ]];
+then
+  echo -e "-------------------------------No hay paquetes que ocupen actualizarse-------------------------------" 
+else
+  echo -e "-------------------------------los siguientes paquetes necesitan actualizarse-------------------------------" 
+    sudo yum check-update -q | awk '{print $1}'
+  for line in $(yum check-update -q | awk '{print $1}');
+  do
+    sudo yum -y update $line
+done
 echo '------------------------------------------------------------------------------'
 echo '------------------------------------------------------------------------------'
 echo '------------------------------------------------------------------------------'
@@ -89,4 +54,5 @@ echo '-------------------------------fin del programa---------------------------
 echo '------------------------------------------------------------------------------'
 echo '------------------------------------------------------------------------------'
 echo '------------------------------------------------------------------------------'
-
+exit 0
+fi
